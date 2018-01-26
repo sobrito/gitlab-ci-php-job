@@ -1,0 +1,106 @@
+image: silenobrito/php:7.1
+
+variables:
+  BUILD_INFO_FILE: './info.properties'
+  SYMFONY_ENV: 'test'
+
+stages:
+  - resume
+  - composer
+  - prepare
+  - static_analysis
+  - phpunit
+  - phpdox
+
+resume:
+  stage: resume
+  script:
+    - 'echo "VERSION=$CI_COMMIT_REF_NAME\r\n" > $BUILD_INFO_FILE'
+    - 'echo "NAME=$CI_PROJECT_NAME\r\n" > $BUILD_INFO_FILE'
+    - 'echo "DIR=$CI_PROJECT_DIR\r\n" > $BUILD_INFO_FILE'
+    - 'echo "SKELETON=$CI_PROJECT_DIR/package-root\r\n" > $BUILD_INFO_FILE'
+
+clean:
+  stage: clean
+  script:
+    - 'rm -fr ./build/api'
+    - 'rm -fr ./build/coverage'
+    - 'rm -fr ./build/logs'
+    - 'rm -fr ./build/pdepend'
+    - 'rm -fr ./build/phpdox'
+    - 'rm -f $BUILD_INFO_FILE'
+
+composer:
+  stage: composer
+  script:
+    - composer update --prefer-dist --no-progress
+
+prepare:
+  stage: prepare
+  script:
+    - mkdir -p ./build/api
+    - mkdir -p ./build/coverage
+    - mkdir -p ./build/logs
+    - mkdir -p ./build/pdepend
+    - mkdir -p ./build/phpdox
+    - chmod 0777 -R ./build
+
+lint:
+  stage: lint
+  script:
+    - find ./src -name "*.php" -print0 | xargs -0 -n1 -P8 php -l
+
+phploc-ci:
+  stage: phploc-ci
+  script:
+    - phploc --count-tests --log-csv build/logs/phploc.csv --log-xml build/logs/phploc.xml src
+
+pdepend:
+  stage: pdepend
+  script:
+    - pdepend --jdepend-xml=build/logs/jdepend.xml --jdepend-chart=build/pdepend/dependencies.svg --overview-pyramid=build/pdepend/overview-pyramid.svg src
+
+phpmd-ci:
+  stage: phpmd
+  script:
+    - phpmd src xml phpmd.xml --reportfile build/logs/pmd.xml
+  dependencies:
+    - prepare
+
+phpcs-ci:
+  state: phpcs-ci
+  script:
+    - phpcs --report=checkstyle --report-file=build/logs/checkstyle.xml --standard=PSR2 --extensions=php --ignore=autoload.php src
+  dependencies:
+    - prepare
+
+phpcpd-ci:
+  state: phpcs-ci
+  script:
+    - phpcs --report=checkstyle --report-file=build/logs/checkstyle.xml --standard=PSR2 --extensions=php --ignore=autoload.php src > /dev/null
+  dependencies:
+    - prepare
+
+static_analysis:
+  stage: analysis
+  dependencies:
+    - lint
+    - phploc-ci
+    - pdepend
+    - phpmd-ci
+    - phpcs-ci
+    - phpcpd-ci
+
+phpunit:
+  stage: phpunit
+  script:
+    - phpunit --configuration ./phpunit.xml
+
+phpdox:
+  stage: phpdox
+  script:
+    - phpdox --file phpdox.xml
+  dependencies:
+     - phploc-ci
+     - phpcs-ci
+     - phpmd-ci
