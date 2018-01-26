@@ -5,10 +5,16 @@ variables:
   SYMFONY_ENV: 'test'
 
 stages:
+  - clean
   - resume
   - composer
   - prepare
-  - static_analysis
+  - lint
+  - phploc-ci
+  - pdepend
+  - phpmd-ci
+  - phpcs-ci
+  - phpcpd-ci
   - phpunit
   - phpdox
 
@@ -33,73 +39,63 @@ clean:
 composer:
   stage: composer
   script:
-    - composer update --prefer-dist --no-progress
+    - 'composer update --prefer-dist --no-progress'
 
 prepare:
   stage: prepare
   script:
-    - mkdir -p ./build/api
-    - mkdir -p ./build/coverage
-    - mkdir -p ./build/logs
-    - mkdir -p ./build/pdepend
-    - mkdir -p ./build/phpdox
-    - chmod 0777 -R ./build
+    - 'mkdir -p ./build/api'
+    - 'mkdir -p ./build/coverage'
+    - 'mkdir -p ./build/logs'
+    - 'mkdir -p ./build/pdepend'
+    - 'mkdir -p ./build/phpdox'
+    - 'chmod 0777 -R ./build'
 
 lint:
   stage: lint
   script:
-    - find ./src -name "*.php" -print0 | xargs -0 -n1 -P8 php -l
+    - 'find ./src -name "*.php" -print0 | xargs -0 -n1 -P8 php -l'
 
 phploc-ci:
   stage: phploc-ci
   script:
-    - phploc --count-tests --log-csv build/logs/phploc.csv --log-xml build/logs/phploc.xml src
+    - 'phploc --count-tests --log-csv build/logs/phploc.csv --log-xml build/logs/phploc.xml src'
 
 pdepend:
   stage: pdepend
   script:
-    - pdepend --jdepend-xml=build/logs/jdepend.xml --jdepend-chart=build/pdepend/dependencies.svg --overview-pyramid=build/pdepend/overview-pyramid.svg src
+    - 'pdepend --jdepend-xml=build/logs/jdepend.xml --jdepend-chart=build/pdepend/dependencies.svg --overview-pyramid=build/pdepend/overview-pyramid.svg src'
 
 phpmd-ci:
-  stage: phpmd
+  stage: phpmd-ci
   script:
-    - phpmd src xml phpmd.xml --reportfile build/logs/pmd.xml
+    - 'phpmd src xml phpmd.xml --reportfile build/logs/pmd.xml'
   dependencies:
     - prepare
 
 phpcs-ci:
-  state: phpcs-ci
+  stage: phpcs-ci
   script:
-    - phpcs --report=checkstyle --report-file=build/logs/checkstyle.xml --standard=PSR2 --extensions=php --ignore=autoload.php src
+    - 'phpcs --report=checkstyle --report-file=build/logs/checkstyle.xml --standard=PSR2 --extensions=php --ignore=autoload.php src'
   dependencies:
     - prepare
 
 phpcpd-ci:
-  state: phpcs-ci
+  stage: phpcs-ci
   script:
-    - phpcs --report=checkstyle --report-file=build/logs/checkstyle.xml --standard=PSR2 --extensions=php --ignore=autoload.php src > /dev/null
+    - 'phpcs --report=checkstyle --report-file=build/logs/checkstyle.xml --standard=PSR2 --extensions=php --ignore=autoload.php src > /dev/null'
   dependencies:
     - prepare
-
-static_analysis:
-  stage: analysis
-  dependencies:
-    - lint
-    - phploc-ci
-    - pdepend
-    - phpmd-ci
-    - phpcs-ci
-    - phpcpd-ci
 
 phpunit:
   stage: phpunit
   script:
-    - phpunit --configuration ./phpunit.xml
+    - 'phpunit --configuration ./phpunit.xml'
 
 phpdox:
   stage: phpdox
   script:
-    - phpdox --file phpdox.xml
+    - 'phpdox --file phpdox.xml'
   dependencies:
      - phploc-ci
      - phpcs-ci
